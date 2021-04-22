@@ -929,6 +929,35 @@ class RouteSection():
         # self.scf = ...
         # self.geom = ... :)
 
+        method = self.get_level_theory(self.text)
+        if '/' in method:
+            f, b = method.split('/')
+            self.functional = f
+            self.basisset = b
+        else:
+            self.functional = method
+            self.bassisset = None
+        self.text = self.text.replace(method, '__METHOD__') # te be replaced in self.write()
+
+    def get_level_theory(self, text):
+        known_functionals = ['b3lyp', 'pbe', 'mp2', 'wb97xd', 'm062x']
+        semi_empiricals = ['pm6', 'am1', 'pm7', 'pm3']
+        fields = text.split()
+        method = None
+        n_found = 0
+        for field in fields:
+            if field.count('/') == 1:
+                f, b = field.split('/')
+                if f in known_functionals:
+                    method = field
+                    n_found += 1
+            elif field in semi_empiricals:
+                n_found += 1
+                method = field
+        if n_found != 1:
+            raise RuntimeError
+        return method
+
     def parse_keyword(self, keywordclass):
         """
             takes a class as input
@@ -945,7 +974,10 @@ class RouteSection():
 
     def write(self):
         # UPDATE TEXT!!! VERY IMPORTANT
-        textout = self.text
+        if self.basisset is not None:
+            textout = self.text.replace('__METHOD__', '%s/%s' % (self.functional, self.basisset))
+        else:
+            textout = self.text.replace('__METHOD__', '%s' % (self.functional)) # e.g. PM6
         for key in self.keywords:
             _,a,b = self.get_keyword(textout, key)
             if self.keywords[key] == None:
