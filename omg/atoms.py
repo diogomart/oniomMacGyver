@@ -3,11 +3,17 @@
 # python modules
 from omg import geom
 import numpy as np
-import openbabel as ob
+from openbabel import openbabel as ob
 
+class PeriodicTable:
+    table = {1: 'H', 2: 'He', 3: 'Li', 5: 'B', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 11: 'Na', 12: 'Mg',
+             15: 'P', 16: 'S', 17: 'Cl', 19: 'K', 20: 'Ca', 25: 'Mn', 26: 'Fe', 27: 'Co', 28: 'Ni',
+             29: 'Cu', 30: 'Zn', 34: 'Se', 35: 'Br', 53: 'I'}
+    def GetSymbol(self, atomic_number):
+        return self.table[atomic_number]
 
-#create a periodic table object
-PERIODIC_TABLE = ob.OBElementTable() # TODO in openbabel-3 OBElements::GetSymbol(6);
+PERIODIC_TABLE = PeriodicTable()
+
 
 class Atom(ob.OBAtom):
     """A container for all the information relative to an atom

@@ -9,7 +9,7 @@ from omg.gaussian.gaussian import GaussianCom as GAUCOM
 from omg import atoms
 from omg import iolines
 from omg import geom
-import openbabel as ob # TODO from openbabel import openbabel (openbabel-3)
+from openbabel import openbabel
 
 def pts_to_int(pts):
     try:

@@ -60,6 +60,7 @@ def print_convergence_symbols(thresholds, data, legend=None,
 
     if multiline and start > 0:
         n = stop / max_symbols_width + int((stop % max_symbols_width) > 0)
+        n = int(n)
         for i in range(n):
             start_ = i * max_symbols_width
             stop_ = min((i+1)*max_symbols_width, stop)
@@ -252,7 +253,7 @@ def main():
     p = asciiplot.AFigure()
     _ = p.plot(x_axis, y, marker='_s')
     p.xlim(min(x_axis), max(x_axis) )
-    print(p.draw().encode('utf-8'))
+    print(p.draw())
     if oneopt:
         print('Energy along optimization point.')
     else:
@@ -260,8 +261,6 @@ def main():
         if scan_info:
             print('X axis matches %s between:' % scan_info[0])
             print(scan_info[1])
-
-    print(x_axis)
     
 if __name__ == '__main__':
     main()
