@@ -9,7 +9,7 @@ from omg.gaussian.gaussian import GaussianCom as GAUCOM
 from omg import atoms
 from omg import iolines
 from omg import geom
-from openbabel import openbabel
+from openbabel import openbabel as ob
 
 def pts_to_int(pts):
     try:
@@ -38,6 +38,7 @@ def get_args():
 """, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-t', '--template_sdf', required=True, help="same atom order as in .log files")
     parser.add_argument('-l', '--logs', help='Gaussian .log files', nargs='+')
+    parser.add_argument('-m', '--monomers', help='Gaussian .log files', nargs='*', default=[])
     parser.add_argument('-s', '--scan_step',
                         help='Scan step ("all" or integer) default="all"',
                         default='all')
@@ -111,10 +112,12 @@ def get_level_of_theory(route_section):
         isCounterpoise = True
     if 'b3lyp/cc-pvdz' in route_section:
         level_of_theory = 'B3LYP_CC-PVDZ'
+    elif 'b3lyp/6-31g*' in route_section:
+        level_of_theory = 'B3LYP_6-31G*'
     elif 'b3lyp/aug-cc-pvdz' in route_section:
         level_of_theory = 'B3LYP_AUG-CC-PVDZ'
     elif 'wb97xd/aug-cc-pvdz' in route_section:
-        level_of_theory = 'WB97XD_AUG_CC_PVDZ'
+        level_of_theory = 'WB97XD_AUG-CC-PVDZ'
     else:
         sys.stderr.write('Please add that level of theory\n')
         raise RuntimeError
@@ -145,6 +148,15 @@ if __name__ == '__main__':
         level_of_theory.add(get_level_of_theory(gaulog.route_section))
     if len(level_of_theory) != 1: raise RuntimeError
     level_of_theory = level_of_theory.pop() # becomes string
+    if len(args.monomers):
+        monomer_level_of_theory = set()
+        monomer_gaulogs = [GAULOG(log_filename) for log_filename in args.monomers]
+        for gaulog in monomer_gaulogs:
+            monomer_level_of_theory.add(get_level_of_theory(gaulog.route_section))
+        if len(monomer_level_of_theory) != 1: raise RuntimeError
+        monomer_level_of_theory = monomer_level_of_theory.pop() # becomes string
+        if level_of_theory.replace('_CP', '') != monomer_level_of_theory:
+            raise RuntimeError
 
     # indexes of scanned/constrained variables
     atomids = cat_modreds(gaulogs)
@@ -155,17 +167,29 @@ if __name__ == '__main__':
     # gather coordinates and energies from multiple Gaussian .log files
     if level_of_theory.endswith('_CP'):
         energy_keyword = 'counterpoise'
+        energy_keyword_monomer = 'SCF_energy'
     elif level_of_theory.startswith('B3LYP') or level_of_theory.startswith('WB97XD'):
         energy_keyword = 'SCF_energy'
+        energy_keyword_monomer = 'SCF_energy'
     else:
         raise NotImplementedError
+
+    energy_apo = 0
+    for gaulog in monomer_gaulogs:
+        if len(gaulog.energies[energy_keyword_monomer]) != 1:
+            raise RuntimeError('monomer does not seem to be an optimization - implement single point parsing?')
+        energy_apo += gaulog.energies[energy_keyword_monomer][-1][-1]
+
     xyz_list = []
     energies = []
+    deltaE = []
     for gaulog in gaulogs:
         coords = extract_coordinates(gaulog, args.scan_step, args.opt_step, args)
         xyz_list.extend(coords)
         current_energies = [opt[-1] for opt in gaulog.energies[energy_keyword]]
         energies.extend(current_energies)
+        if len(args.monomers):
+            deltaE.extend([627.509 * (e - energy_apo) for e in current_energies])
 
     obconv = ob.OBConversion()
     obconv.SetOutFormat('sdf')
@@ -192,6 +216,8 @@ if __name__ == '__main__':
         fields += ">  <SMILES>\n%s\n\n" % smiles
         fields += ">  <MinMethod>\n%s\n\n" % level_of_theory
         fields += ">  <Energy>\n%.7f\n\n" % energies[i]
+        if len(args.monomers):
+            fields += ">  <deltaE>\n%.7f\n\n" % deltaE[i] # TODO subtract monomers / g16 counterpoise
         fields += ">  <ScanAtoms_1>\n%s\n\n" % scan_atoms
         fields += ">  <ScanVar_1>\n%.7f\n\n" % scan_var
         sdf_fields.append(fields)
