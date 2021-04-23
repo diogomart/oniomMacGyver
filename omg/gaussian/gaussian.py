@@ -238,6 +238,24 @@ class GaussianCom(EmptyGaussianCom):
         for line in self.lines[:self.blank_lines[0]]:
             if '%' in line: link_0_commands.append(line)
         return link_0_commands
+
+    def set_nproc(self, n_cpu):
+        index = 0
+        for line in self.link_0_commands:
+            if line.startswith('%nproc'):
+                self.link_0_commands[index] = '%' + 'nproc=%d\n' % n_cpu
+                return
+            index += 1
+        self.link_0_commands.insert(0, '%' + 'nproc=%d\n' % n_cpu)
+
+    def set_mem(self, memstring):
+        index = 0
+        for line in self.link_0_commands:
+            if line.startswith('%mem'):
+                self.link_0_commands[index] = '%' + 'mem=%s\n' % memstring
+                return
+            index += 1
+        self.link_0_commands.insert(0, '%' + 'mem=%s\n' % memstring)
         
     def _read_route_section(self):
         """Return a string with the route section"""
@@ -602,9 +620,12 @@ class GaussianLog():
         # add signature: route_section + zmat + last_xyz + filesize
     def _gen_signature(self):
         atomidx = [i for i in range(len(self.atoms_list))]
-        last_xyz_byte = self.bytedict['orientation:'][-1][-1]
-        lastxyz = self.read_coordinates(atomidx, last_xyz_byte)
-        lastxyz = ''.join(['%12.6f%12.6f%12.6f\n' % xyz for xyz in lastxyz])
+        if len(self.bytedict['orientation:']) > 0:
+            last_xyz_byte = self.bytedict['orientation:'][-1][-1]
+            lastxyz = self.read_coordinates(atomidx, last_xyz_byte)
+            lastxyz = ''.join(['%12.6f%12.6f%12.6f\n' % xyz for xyz in lastxyz])
+        else:
+            lastxyz = ''
         return (
             self.routesection_md5sum,
             self.zmat_md5sum,
@@ -801,6 +822,9 @@ class GaussianLog():
         raise RuntimeError(error_msg)
 
     def read_geometry(self, opt_step, scan_step):
+
+        if len(self.bytedict['orientation:']) == 0:
+            return None
 
         with open(self.name, 'r') as f:
             f.seek(self.bytedict['orientation:'][scan_step][opt_step])

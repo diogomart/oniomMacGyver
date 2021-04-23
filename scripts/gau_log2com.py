@@ -80,11 +80,14 @@ def main():
     args = get_args()
     gaulog = GaussianLog(args.log)
     gaucom = GaussianCom(args.template_com)
-    if args.opt_step == 'AUTO':
+    if args.opt_step == 'AUTO' and gaulog.final_geometry is not None:
         args.opt_step = find_most_converged(gaulog, args.scan_step)
     atoms_log_coords = gaulog.read_geometry(args.opt_step, args.scan_step)
-    for no, atom in enumerate(gaucom.atoms_list):
-        atom.SetVector(atoms_log_coords[no].GetVector())
+    if atoms_log_coords is None:
+        print("No optimized coords in %s, just copying from .com file" % args.log)
+    else:
+        for no, atom in enumerate(gaucom.atoms_list):
+            atom.SetVector(atoms_log_coords[no].GetVector())
     gaucom.write_to_file(args.new_com)
 
 if __name__ == "__main__":
