@@ -118,6 +118,8 @@ def get_level_of_theory(route_section):
         level_of_theory = 'B3LYP_AUG-CC-PVDZ'
     elif 'wb97xd/aug-cc-pvdz' in route_section:
         level_of_theory = 'WB97XD_AUG-CC-PVDZ'
+    elif 'b3lyp/def2svp' in route_section:
+        level_of_theory = 'B3LYP_DEF2SVP'
     else:
         sys.stderr.write('Please add that level of theory\n')
         raise RuntimeError
@@ -157,12 +159,19 @@ if __name__ == '__main__':
         monomer_level_of_theory = monomer_level_of_theory.pop() # becomes string
         if level_of_theory.replace('_CP', '') != monomer_level_of_theory:
             raise RuntimeError
+        energy_apo = 0
+        for gaulog in monomer_gaulogs:
+            if len(gaulog.energies[energy_keyword_monomer]) != 1:
+                raise RuntimeError('monomer does not seem to be an optimization - implement single point parsing?')
+            energy_apo += gaulog.energies[energy_keyword_monomer][-1][-1]
 
     # indexes of scanned/constrained variables
     atomids = cat_modreds(gaulogs)
     if len(atomids) > 1: raise RuntimeError
-    atomids = atomids.pop() # will fail if modred not in .log
-    scan_atoms = ' '.join(['%d' % i for i in atomids])
+    is_modred = len(atomids) > 0
+    if is_modred:
+        atomids = atomids.pop() # will fail if modred not in .log
+        scan_atoms = ' '.join(['%d' % i for i in atomids])
 
     # gather coordinates and energies from multiple Gaussian .log files
     if level_of_theory.endswith('_CP'):
@@ -173,12 +182,6 @@ if __name__ == '__main__':
         energy_keyword_monomer = 'SCF_energy'
     else:
         raise NotImplementedError
-
-    energy_apo = 0
-    for gaulog in monomer_gaulogs:
-        if len(gaulog.energies[energy_keyword_monomer]) != 1:
-            raise RuntimeError('monomer does not seem to be an optimization - implement single point parsing?')
-        energy_apo += gaulog.energies[energy_keyword_monomer][-1][-1]
 
     xyz_list = []
     energies = []
@@ -191,8 +194,11 @@ if __name__ == '__main__':
         if len(args.monomers):
             deltaE.extend([627.509 * (e - energy_apo) for e in current_energies])
 
+    output_format = os.path.splitext(args.out)[1][1:]
+    if output_format not in ['mol', 'sdf']:
+        raise RuntimeError('output must be MOL/SDF')
     obconv = ob.OBConversion()
-    obconv.SetOutFormat('sdf')
+    obconv.SetOutFormat(output_format)
     mol_blocks = []
     sdf_fields = []
     n_frames = len(xyz_list)
@@ -207,27 +213,30 @@ if __name__ == '__main__':
         mol_block = obconv.WriteString(obmol)
         mol_blocks.append(mol_block)
 
-        current_xyz = xyz_list[i]
-        tmpcoords = [current_xyz[index_atom-1] for index_atom in atomids]
-        scan_var = geom.anymetric(tmpcoords)
-
-        # sdf fields
-        fields  = ""
-        fields += ">  <SMILES>\n%s\n\n" % smiles
-        fields += ">  <MinMethod>\n%s\n\n" % level_of_theory
-        fields += ">  <Energy>\n%.7f\n\n" % energies[i]
-        if len(args.monomers):
-            fields += ">  <deltaE>\n%.7f\n\n" % deltaE[i] # TODO subtract monomers / g16 counterpoise
-        fields += ">  <ScanAtoms_1>\n%s\n\n" % scan_atoms
-        fields += ">  <ScanVar_1>\n%.7f\n\n" % scan_var
-        sdf_fields.append(fields)
+        if output_format == 'sdf':
+            fields  = ""
+            fields += ">  <SMILES>\n%s\n\n" % smiles
+            fields += ">  <MinMethod>\n%s\n\n" % level_of_theory
+            fields += ">  <Energy>\n%.7f\n\n" % energies[i]
+            if len(args.monomers):
+                fields += ">  <deltaE>\n%.7f\n\n" % deltaE[i] # TODO subtract monomers / g16 counterpoise
+            if is_modred:
+                current_xyz = xyz_list[i]
+                tmpcoords = [current_xyz[index_atom-1] for index_atom in atomids]
+                scan_var = geom.anymetric(tmpcoords)
+                fields += ">  <ScanAtoms_1>\n%s\n\n" % scan_atoms
+                fields += ">  <ScanVar_1>\n%.7f\n\n" % scan_var
+            sdf_fields.append(fields)
     
     # write output .sdf
     out_text = ""
     for i in range(n_frames):
-        out_text += mol_blocks[i][:-5] # remove "$$$$\n"
-        out_text += sdf_fields[i]
-        out_text += mol_blocks[i][-5:] #    add "$$$$\n"
+        if output_format == 'sdf':
+            out_text += mol_blocks[i][:-5] # remove "$$$$\n"
+            out_text += sdf_fields[i]
+            out_text += mol_blocks[i][-5:] #    add "$$$$\n"
+        elif output_format == 'mol':
+            out_text += mol_blocks[i]
 
     with open(args.out, 'w') as f:
         f.write(out_text)
