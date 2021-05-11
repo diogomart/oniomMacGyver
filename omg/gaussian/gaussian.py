@@ -27,7 +27,8 @@ ADDITIONAL_INPUT_DICT = collections.OrderedDict([
                                                 (" gen",None),
                                                 ("pseudo=read",None),
                                                 ("first",None),
-                                                ("dftb=read",None) 
+                                                ("dftb=read",None),
+                                                ("readradii", [])
                                                ]) 
 
 
